@@ -18,7 +18,7 @@ export default function LoginPage() {
   const { signIn } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get("redirectTo") || "/dashboard"
+  const redirectTo = searchParams.get("redirect") || "/dashboard"
   const { toast } = useToast()
 
   // Estado para login
@@ -66,7 +66,10 @@ export default function LoginPage() {
           title: "Login realizado com sucesso",
           description: "Bem-vindo de volta!",
         })
-        router.push(redirectTo)
+        setTimeout(() => {
+          router.push(redirectTo)
+          router.refresh()
+        }, 500)
       }
     } catch (error) {
       console.error("Erro inesperado:", error)

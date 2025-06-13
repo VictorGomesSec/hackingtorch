@@ -1,22 +1,17 @@
-import { supabase } from "@/lib/supabase/client"
+import { createBrowserSupabaseClient } from "@/lib/supabase/client"
 import { createServerClient } from "@/lib/supabase/server"
+import type { Database } from "@/lib/supabase/types"
 
-export type Profile = {
-  id: string
-  first_name: string
-  last_name: string
-  email: string
-  phone?: string
-  bio?: string
-  website?: string
-  avatar_url?: string
-  user_type: "participant" | "organizer"
-  created_at: string
-  updated_at: string
-}
+const supabase = createBrowserSupabaseClient()
 
-export async function getProfile(userId: string) {
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
+
+export async function getProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single()
 
   if (error) {
     console.error("Erro ao buscar perfil:", error)
@@ -26,37 +21,47 @@ export async function getProfile(userId: string) {
   return data
 }
 
-export async function updateProfile(userId: string, profileData: Partial<Profile>) {
-  const { data, error } = await supabase.from("profiles").update(profileData).eq("id", userId).select().single()
+export async function updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", userId)
+    .select()
+    .single()
 
-  return { profile: data, error }
+  if (error) {
+    console.error("Erro ao atualizar perfil:", error)
+    return null
+  }
+
+  return data
 }
 
-export async function uploadAvatar(userId: string, file: File) {
+export async function uploadAvatar(userId: string, file: File): Promise<string | null> {
   const fileExt = file.name.split(".").pop()
-  const fileName = `${userId}-${Math.random().toString(36).substring(2)}.${fileExt}`
+  const fileName = `${userId}-${Math.random()}.${fileExt}`
   const filePath = `avatars/${fileName}`
 
-  const { error: uploadError } = await supabase.storage.from("profiles").upload(filePath, file)
+  const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file)
 
   if (uploadError) {
     console.error("Erro ao fazer upload do avatar:", uploadError)
-    return { error: uploadError }
+    return null
   }
 
-  const { data: urlData } = supabase.storage.from("profiles").getPublicUrl(filePath)
+  const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath)
 
   const { error: updateError } = await supabase
     .from("profiles")
-    .update({ avatar_url: urlData.publicUrl })
+    .update({ avatar_url: publicUrl })
     .eq("id", userId)
 
   if (updateError) {
-    console.error("Erro ao atualizar avatar no perfil:", updateError)
-    return { error: updateError }
+    console.error("Erro ao atualizar URL do avatar:", updateError)
+    return null
   }
 
-  return { url: urlData.publicUrl, error: null }
+  return publicUrl
 }
 
 // Função para o servidor

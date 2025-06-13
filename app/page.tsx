@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Calendar, Flame } from "lucide-react"
@@ -10,8 +11,28 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SupabaseConnectionTest } from "@/components/supabase-connection-test"
 import { SupabaseTest } from '@/components/supabase-test'
+import { createBrowserSupabaseClient } from '@/utils/supabase/client'
+import { getEventsServer } from '@/lib/services/event-service'
 
 export default function HomePage() {
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const eventsData = await getEventsServer({ status: "published" })
+        setEvents(eventsData)
+      } catch (error) {
+        console.error("Erro ao buscar eventos:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchEvents()
+  }, [])
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Hero Section */}
@@ -57,68 +78,84 @@ export default function HomePage() {
 
             <TabsContent value="upcoming" className="mt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map((item) => (
-                  <Link href="/event/details" key={item}>
-                    <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-orange-500/50 transition-all hover:shadow-lg hover:shadow-orange-500/10" role="article">
-                      <div className="relative h-48 overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-red-600/80 to-orange-500/80 mix-blend-multiply" />
-                        <Image
-                          src={`/placeholder.svg?height=200&width=400&text=Hackathon%20${item}`}
-                          alt={`Hackathon ${item}`}
-                          width={400}
-                          height={200}
-                          className="w-full h-full object-cover"
-                          priority={item <= 3}
-                          loading={item <= 3 ? "eager" : "lazy"}
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        />
-                        <Badge className="absolute top-3 right-3 bg-black/70 text-white">
-                          {item % 2 === 0 ? "Online" : "Presencial"}
-                        </Badge>
-                      </div>
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-bold text-lg">Hackathon Future Tech {item}</h3>
-                          <Badge variant="outline" className="border-orange-500/50 text-orange-400">
-                            {item % 3 === 0 ? "AI" : item % 2 === 0 ? "Web3" : "IoT"}
+                {loading ? (
+                  <div className="col-span-full flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+                  </div>
+                ) : events.length === 0 ? (
+                  <Card className="bg-zinc-900/50 border-zinc-800">
+                    <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+                      <Calendar className="h-12 w-12 text-zinc-600 mb-4" />
+                      <h3 className="text-xl font-medium mb-2">Nenhum evento encontrado</h3>
+                      <p className="text-zinc-400 mb-6">Não há eventos disponíveis no momento.</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  events.map((event) => (
+                    <Link href={`/event/details?id=${event.id}`} key={event.id}>
+                      <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-orange-500/50 transition-all hover:shadow-lg hover:shadow-orange-500/10">
+                        <div className="relative h-48 overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-br from-red-600/80 to-orange-500/80 mix-blend-multiply" />
+                          <Image
+                            src={event.cover_image_url || `/placeholder.svg?height=200&width=400&text=${event.name}`}
+                            alt={event.name}
+                            width={400}
+                            height={200}
+                            className="w-full h-full object-cover"
+                          />
+                          <Badge className="absolute top-3 right-3 bg-black/70 text-white">
+                            {event.event_type === "online" ? "Online" : "Presencial"}
                           </Badge>
                         </div>
-                        <p className="text-zinc-400 text-sm mb-3 line-clamp-2">
-                          Um evento incrível para desenvolvedores, designers e entusiastas de tecnologia.
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-zinc-500">
-                          <Calendar className="h-4 w-4" />
-                          <span>12-14 Jun, 2025</span>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="p-4 pt-0 flex justify-between items-center">
-                        <div className="flex -space-x-2">
-                          {[1, 2, 3].map((avatar) => (
-                            <Avatar key={avatar} className="border-2 border-zinc-900 h-6 w-6">
-                              <AvatarImage 
-                                src={`/placeholder.svg?height=24&width=24&text=${avatar}`}
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement
-                                  target.src = "/placeholder.svg?height=24&width=24&text=?"
-                                }}
-                              />
-                              <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500 text-xs">
-                                {avatar}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
-                          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-zinc-800 text-xs text-zinc-400 border-2 border-zinc-900">
-                            +42
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="font-bold text-lg">{event.name}</h3>
+                            <Badge variant="outline" className="border-orange-500/50 text-orange-400">
+                              {event.categories?.[0] || "Geral"}
+                            </Badge>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 text-orange-400">
-                          <Flame className="h-4 w-4" />
-                          <span className="text-sm font-medium">{120 + item * 10}</span>
-                        </div>
-                      </CardFooter>
-                    </Card>
-                  </Link>
-                ))}
+                          <p className="text-zinc-400 text-sm mb-3 line-clamp-2">
+                            {event.description || "Sem descrição"}
+                          </p>
+                          <div className="flex items-center gap-2 text-sm text-zinc-500">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {new Date(event.start_date).toLocaleDateString("pt-BR")} -{" "}
+                              {new Date(event.end_date).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                        </CardContent>
+                        <CardFooter className="p-4 pt-0 flex justify-between items-center">
+                          <div className="flex -space-x-2">
+                            {event.profiles?.slice(0, 3).map((profile, index) => (
+                              <Avatar key={index} className="border-2 border-zinc-900 h-6 w-6">
+                                <AvatarImage 
+                                  src={profile.avatar_url || `/placeholder.svg?height=24&width=24&text=${profile.first_name?.[0]}`}
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement
+                                    target.src = "/placeholder.svg?height=24&width=24&text=?"
+                                  }}
+                                />
+                                <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500 text-xs">
+                                  {profile.first_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {event.profiles?.length > 3 && (
+                              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-zinc-800 text-xs text-zinc-400 border-2 border-zinc-900">
+                                +{event.profiles.length - 3}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 text-orange-400">
+                            <Flame className="h-4 w-4" />
+                            <span className="text-sm font-medium">{event.participants_count || 0}</span>
+                          </div>
+                        </CardFooter>
+                      </Card>
+                    </Link>
+                  ))
+                )}
               </div>
             </TabsContent>
 

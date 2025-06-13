@@ -1,15 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    domains: ['localhost', process.env.NEXT_PUBLIC_SUPABASE_URL?.replace('https://', '')],
+    formats: ['image/avif', 'image/webp'],
+  },
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ['@radix-ui/react-icons', 'lucide-react'],
+  },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  poweredByHeader: false,
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: false,
   },
   typescript: {
     ignoreBuildErrors: false,
-  },
-  images: {
-    domains: ["localhost"],
-    unoptimized: true,
   },
   // Configuração de variáveis de ambiente
   env: {
@@ -25,11 +33,6 @@ const nextConfig = {
       poll: 1000,
     }
     return config
-  },
-  // Configurações de performance
-  experimental: {
-    optimizeCss: true,
-    scrollRestoration: true,
   },
   // Headers de segurança
   async headers() {

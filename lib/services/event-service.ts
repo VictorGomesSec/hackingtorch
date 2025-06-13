@@ -1,25 +1,12 @@
-import type { Database } from "@/types/supabase"
+import { createBrowserSupabaseClient } from "@/lib/supabase/client"
+import type { Database } from "@/lib/supabase/types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createServerClient } from "@/lib/supabase/server"
 import type { PostgrestError } from "@supabase/supabase-js"
 
-export type Event = {
-  id: string
-  title: string
-  name: string
-  description: string
-  start_date: string
-  end_date: string
-  location: string
-  status: "draft" | "published" | "completed" | "cancelled"
-  created_at: string
-  organizer_id: string
-  cover_image_url?: string
-  max_participants?: number
-  max_team_size?: number
-  registration_fee?: number
-  is_featured: boolean
-  categories?: string[]
+const supabase = createBrowserSupabaseClient()
+
+export type Event = Database["public"]["Tables"]["events"]["Row"] & {
   profiles?: {
     first_name: string
     last_name: string
@@ -30,84 +17,163 @@ export type Event = {
 export type EventCreateInput = Omit<Event, "id" | "created_at" | "updated_at">
 export type EventUpdateInput = Partial<Omit<Event, "id" | "created_at" | "updated_at">>
 
-export async function getEvents(supabase: SupabaseClient<Database>) {
-  let query = supabase
-    .from("events")
-    .select(`
-      *,
-      event_categories (
-        category
-      ),
-      profiles (
-        first_name,
-        last_name,
-        avatar_url
-      )
-    `)
-    .order("created_at", { ascending: false })
+// Classe de erro personalizada
+export class EventServiceError extends Error {
+  constructor(message: string, public code?: string, public originalError?: any) {
+    super(message)
+    this.name = 'EventServiceError'
+  }
+}
 
-  const { data, error } = await query
+// Função para validar dados do evento
+function validateEventData(eventData: Partial<Event>): void {
+  if (eventData.start_date && eventData.end_date) {
+    const startDate = new Date(eventData.start_date)
+    const endDate = new Date(eventData.end_date)
+    
+    if (startDate > endDate) {
+      throw new EventServiceError('A data de início deve ser anterior à data de término')
+    }
+  }
+  
+  if (eventData.name && eventData.name.length < 3) {
+    throw new EventServiceError('O nome do evento deve ter pelo menos 3 caracteres')
+  }
+}
+
+export async function getEvents(): Promise<Event[]> {
+  try {
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .order("start_date", { ascending: true })
+
+    if (error) {
+      throw new EventServiceError('Erro ao buscar eventos', 'FETCH_ERROR', error)
+    }
+
+    return data || []
+  } catch (error) {
+    if (error instanceof EventServiceError) {
+      throw error
+    }
+    throw new EventServiceError('Erro inesperado ao buscar eventos', 'UNKNOWN_ERROR', error)
+  }
+}
+
+export async function getEventById(eventId: string): Promise<Event | null> {
+  try {
+    if (!eventId) {
+      throw new EventServiceError('ID do evento é obrigatório', 'INVALID_INPUT')
+    }
+
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("id", eventId)
+      .single()
+
+    if (error) {
+      throw new EventServiceError('Erro ao buscar evento', 'FETCH_ERROR', error)
+    }
+
+    return data
+  } catch (error) {
+    if (error instanceof EventServiceError) {
+      throw error
+    }
+    throw new EventServiceError('Erro inesperado ao buscar evento', 'UNKNOWN_ERROR', error)
+  }
+}
+
+export async function getOrganizerEvents(organizerId: string): Promise<Event[]> {
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("organizer_id", organizerId)
+    .order("start_date", { ascending: true })
 
   if (error) {
-    console.error("Erro ao buscar eventos:", error)
+    console.error("Erro ao buscar eventos do organizador:", error)
     return []
   }
 
-  return data.map((event) => ({
-    ...event,
-    categories: event.event_categories?.map((ec: { category: string }) => ec.category) || [],
-  }))
+  return data || []
 }
 
-export async function getEventById(supabase: SupabaseClient<Database>, id: string) {
-  const { data, error } = await supabase
-    .from("events")
-    .select(`
-      *,
-      event_categories (
-        category
-      ),
-      profiles (
-        first_name,
-        last_name,
-        avatar_url
-      )
-    `)
-    .eq("id", id)
-    .single()
+export async function createEvent(eventData: EventCreateInput): Promise<Event | null> {
+  try {
+    validateEventData(eventData)
 
-  if (error) {
-    console.error("Erro ao buscar evento:", error)
-    return null
-  }
+    const { data, error } = await supabase
+      .from("events")
+      .insert(eventData)
+      .select()
+      .single()
 
-  return {
-    ...data,
-    categories: data.event_categories?.map((ec: { category: string }) => ec.category) || [],
+    if (error) {
+      throw new EventServiceError('Erro ao criar evento', 'CREATE_ERROR', error)
+    }
+
+    return data
+  } catch (error) {
+    if (error instanceof EventServiceError) {
+      throw error
+    }
+    throw new EventServiceError('Erro inesperado ao criar evento', 'UNKNOWN_ERROR', error)
   }
 }
 
-export async function createEvent(supabase: SupabaseClient<Database>, eventData: Omit<Event, "id" | "created_at">) {
-  const { data, error } = await supabase.from("events").insert(eventData).select().single()
+export async function updateEvent(eventId: string, updates: EventUpdateInput): Promise<Event | null> {
+  try {
+    if (!eventId) {
+      throw new EventServiceError('ID do evento é obrigatório', 'INVALID_INPUT')
+    }
 
-  return { event: data, error }
+    validateEventData(updates)
+
+    const { data, error } = await supabase
+      .from("events")
+      .update(updates)
+      .eq("id", eventId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new EventServiceError('Erro ao atualizar evento', 'UPDATE_ERROR', error)
+    }
+
+    return data
+  } catch (error) {
+    if (error instanceof EventServiceError) {
+      throw error
+    }
+    throw new EventServiceError('Erro inesperado ao atualizar evento', 'UNKNOWN_ERROR', error)
+  }
 }
 
-export async function updateEvent(supabase: SupabaseClient<Database>, id: string, eventData: Partial<Event>) {
-  const { data, error } = await supabase
-    .from("events")
-    .update(eventData)
-    .eq("id", id)
-    .select()
-    .single()
+export async function deleteEvent(eventId: string): Promise<boolean> {
+  try {
+    if (!eventId) {
+      throw new EventServiceError('ID do evento é obrigatório', 'INVALID_INPUT')
+    }
 
-  return { event: data, error }
-}
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", eventId)
 
-export async function deleteEvent(supabase: SupabaseClient<Database>, id: string) {
-  const { error } = await supabase.from("events").delete().eq("id", id)
+    if (error) {
+      throw new EventServiceError('Erro ao deletar evento', 'DELETE_ERROR', error)
+    }
 
-  return { error }
+    return true
+  } catch (error) {
+    if (error instanceof EventServiceError) {
+      throw error
+    }
+    throw new EventServiceError('Erro inesperado ao deletar evento', 'UNKNOWN_ERROR', error)
+  }
 }
 
 // Função para o servidor
@@ -152,8 +218,7 @@ export async function getEventsServer(
     const { data, error } = await query.order("start_date", { ascending: true }).limit(limit)
 
     if (error) {
-      console.error("Erro ao buscar eventos:", error)
-      return []
+      throw new EventServiceError('Erro ao buscar eventos no servidor', 'SERVER_FETCH_ERROR', error)
     }
 
     // Transformar os dados para um formato mais fácil de usar
@@ -165,7 +230,9 @@ export async function getEventsServer(
       }
     })
   } catch (error) {
-    console.error("Erro inesperado ao buscar eventos no servidor:", error)
-    return []
+    if (error instanceof EventServiceError) {
+      throw error
+    }
+    throw new EventServiceError('Erro inesperado ao buscar eventos no servidor', 'UNKNOWN_ERROR', error)
   }
 }

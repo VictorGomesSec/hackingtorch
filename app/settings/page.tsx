@@ -18,6 +18,7 @@ import {
   Trash2,
   Save,
   X,
+  HelpCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -116,6 +117,7 @@ export default function SettingsPage() {
                     { icon: <Lock className="h-4 w-4" />, label: "Segurança", id: "security" },
                     { icon: <CreditCard className="h-4 w-4" />, label: "Pagamentos", id: "payments" },
                     { icon: <Shield className="h-4 w-4" />, label: "Privacidade", id: "privacy" },
+                    { icon: <HelpCircle className="h-4 w-4" />, label: "Ajuda", id: "help" },
                   ].map((item) => (
                     <Button
                       key={item.id}
@@ -426,6 +428,31 @@ export default function SettingsPage() {
                         </p>
                         <Button variant="destructive" className="bg-red-600 hover:bg-red-700">
                           <Trash2 className="h-4 w-4 mr-1.5" /> Excluir minha conta
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "help" && (
+              <Card className="bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle>Ajuda</CardTitle>
+                  <CardDescription className="text-zinc-400">Central de ajuda e suporte</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Central de ajuda</h3>
+                    <div className="space-y-3">
+                      <div className="p-4 border border-red-900/50 bg-red-950/20 rounded-lg">
+                        <h4 className="font-medium mb-2">Ajuda e suporte</h4>
+                        <p className="text-sm text-zinc-400 mb-4">
+                          Se você precisar de ajuda ou suporte, entre em contato conosco.
+                        </p>
+                        <Button variant="destructive" className="bg-red-600 hover:bg-red-700">
+                          <HelpCircle className="h-4 w-4 mr-1.5" /> Entrar em contato
                         </Button>
                       </div>
                     </div>

@@ -1,4 +1,10 @@
+"use client"
+
+import { useEffect, useState, Suspense } from "react"
 import Link from "next/link"
+import Image from "next/image"
+import { useAuth } from "@/lib/hooks/use-auth"
+import { getProfile, updateProfile, uploadAvatar, type Profile } from "@/lib/services/user-service"
 import {
   Flame,
   User,
@@ -33,91 +39,175 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
+
+// Componente de loading
+function ProfileLoading() {
+  return (
+    <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500 mx-auto mb-4"></div>
+        <p>Carregando perfil...</p>
+      </div>
+    </div>
+  )
+}
+
+// Componente de header
+function ProfileHeader({ profile, onEditClick }: { profile: Profile, onEditClick: () => void }) {
+  return (
+    <header className="sticky top-0 z-10 backdrop-blur-lg bg-black/80 border-b border-zinc-800">
+      <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <Flame className="h-6 w-6 text-orange-500" />
+          <span className="font-bold text-xl bg-gradient-to-r from-red-500 to-orange-400 bg-clip-text text-transparent">
+            HackingTorch
+          </span>
+        </Link>
+        <div className="flex items-center gap-4">
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+            <Input
+              placeholder="Buscar eventos..."
+              className="w-64 bg-zinc-900/80 border-zinc-800 pl-9 h-9 rounded-full text-sm"
+            />
+          </div>
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Avatar className="h-8 w-8 border border-zinc-700 hover:border-orange-500 transition-colors cursor-pointer">
+                <AvatarImage src={profile.avatar_url || "/placeholder.svg?height=32&width=32"} />
+                <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500">
+                  {profile.first_name?.[0]}{profile.last_name?.[0]}
+                </AvatarFallback>
+              </Avatar>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 bg-zinc-900 border-zinc-800 text-white">
+              <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                <Link href="/profile" className="w-full">
+                  Perfil
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                <Calendar className="mr-2 h-4 w-4" />
+                <Link href="/dashboard" className="w-full">
+                  Dashboard
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
+                <Link href="/settings" className="w-full">
+                  Configurações
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer text-red-400 hover:text-red-300">
+                <LogOut className="mr-2 h-4 w-4" />
+                <Link href="/" className="w-full">
+                  Sair
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </header>
+  )
+}
 
 export default function ProfilePage() {
+  const { user } = useAuth()
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [formData, setFormData] = useState<Partial<Profile>>({})
+
+  useEffect(() => {
+    if (user?.id) {
+      loadProfile()
+    }
+  }, [user?.id])
+
+  const loadProfile = async () => {
+    if (!user?.id) return
+    const profileData = await getProfile(user.id)
+    if (profileData) {
+      setProfile(profileData)
+      setFormData(profileData)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user?.id) return
+
+    const updatedProfile = await updateProfile(user.id, formData)
+    if (updatedProfile) {
+      setProfile(updatedProfile)
+      setIsEditing(false)
+      toast.success("Perfil atualizado com sucesso!")
+    } else {
+      toast.error("Erro ao atualizar perfil")
+    }
+  }
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+
+    const avatarUrl = await uploadAvatar(user.id, file)
+    if (avatarUrl) {
+      setProfile((prev) => prev ? { ...prev, avatar_url: avatarUrl } : null)
+      toast.success("Avatar atualizado com sucesso!")
+    } else {
+      toast.error("Erro ao atualizar avatar")
+    }
+  }
+
+  if (!profile) {
+    return <ProfileLoading />
+  }
+
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-10 backdrop-blur-lg bg-black/80 border-b border-zinc-800">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Flame className="h-6 w-6 text-orange-500" />
-            <span className="font-bold text-xl bg-gradient-to-r from-red-500 to-orange-400 bg-clip-text text-transparent">
-              HackingTorch
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
-              <Input
-                placeholder="Buscar eventos..."
-                className="w-64 bg-zinc-900/80 border-zinc-800 pl-9 h-9 rounded-full text-sm"
-              />
-            </div>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Avatar className="h-8 w-8 border border-zinc-700 hover:border-orange-500 transition-colors cursor-pointer">
-                  <AvatarImage src="/placeholder.svg?height=32&width=32" />
-                  <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500">JD</AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-zinc-900 border-zinc-800 text-white">
-                <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-zinc-800" />
-                <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  <Link href="/profile" className="w-full">
-                    Perfil
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  <Link href="/dashboard" className="w-full">
-                    Dashboard
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <Link href="/settings" className="w-full">
-                    Configurações
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-zinc-800" />
-                <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer text-red-400 hover:text-red-300">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <Link href="/" className="w-full">
-                    Sair
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      <Suspense fallback={<ProfileLoading />}>
+        <ProfileHeader profile={profile} onEditClick={() => setIsEditing(!isEditing)} />
+      </Suspense>
 
       <div className="container mx-auto px-4 py-8">
         {/* Profile Header */}
         <div className="relative mb-8">
           <div className="h-48 rounded-xl overflow-hidden bg-gradient-to-r from-red-900/30 to-orange-900/30">
-            <img
+            <Image
               src="/placeholder.svg?height=192&width=1200&text=Cover"
               alt="Cover"
+              width={1200}
+              height={192}
               className="w-full h-full object-cover opacity-50"
+              priority
             />
           </div>
           <div className="absolute bottom-0 left-8 transform translate-y-1/2 flex items-end">
             <Avatar className="h-24 w-24 border-4 border-black">
-              <AvatarImage src="/placeholder.svg?height=96&width=96&text=JD" />
-              <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500 text-2xl">JD</AvatarFallback>
+              <AvatarImage src={profile.avatar_url || "/placeholder.svg?height=96&width=96"} />
+              <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500 text-2xl">
+                {profile.first_name?.[0]}{profile.last_name?.[0]}
+              </AvatarFallback>
             </Avatar>
           </div>
           <div className="flex justify-end mt-4">
-            <Button variant="outline" size="sm" className="border-zinc-700">
-              <Edit className="h-4 w-4 mr-1.5" /> Editar Perfil
+            <Button variant="outline" size="sm" className="border-zinc-700" onClick={() => setIsEditing(!isEditing)}>
+              <Edit className="h-4 w-4 mr-1.5" /> {isEditing ? "Cancelar" : "Editar Perfil"}
             </Button>
           </div>
         </div>
@@ -127,27 +217,52 @@ export default function ProfilePage() {
           <div className="space-y-6">
             <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
-                <CardTitle>João Silva</CardTitle>
+                <CardTitle>
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <Input
+                        name="first_name"
+                        value={formData.first_name || ""}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700"
+                        placeholder="Nome"
+                      />
+                      <Input
+                        name="last_name"
+                        value={formData.last_name || ""}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700"
+                        placeholder="Sobrenome"
+                      />
+                    </div>
+                  ) : (
+                    `${profile.first_name} ${profile.last_name}`
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-2 text-zinc-400">
                   <Briefcase className="h-4 w-4" />
-                  <span>Desenvolvedor Frontend</span>
-                </div>
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <MapPin className="h-4 w-4" />
-                  <span>São Paulo, Brasil</span>
+                  <span>{profile.user_type === "organizer" ? "Organizador" : "Participante"}</span>
                 </div>
                 <div className="flex items-center gap-2 text-zinc-400">
                   <Mail className="h-4 w-4" />
-                  <span>joao.silva@email.com</span>
+                  <span>{profile.email}</span>
                 </div>
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <Globe className="h-4 w-4" />
-                  <Link href="#" className="text-orange-400 hover:text-orange-300">
-                    joaosilva.dev
-                  </Link>
-                </div>
+                {profile.phone && (
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <MapPin className="h-4 w-4" />
+                    <span>{profile.phone}</span>
+                  </div>
+                )}
+                {profile.website && (
+                  <div className="flex items-center gap-2 text-zinc-400">
+                    <Globe className="h-4 w-4" />
+                    <Link href={profile.website} className="text-orange-400 hover:text-orange-300">
+                      {profile.website}
+                    </Link>
+                  </div>
+                )}
 
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" size="icon" className="rounded-full border-zinc-700">
@@ -160,6 +275,23 @@ export default function ProfilePage() {
                     <Linkedin className="h-4 w-4" />
                   </Button>
                 </div>
+
+                {isEditing && (
+                  <div className="pt-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                      id="avatar-upload"
+                    />
+                    <label htmlFor="avatar-upload">
+                      <Button variant="outline" className="w-full border-zinc-700">
+                        Alterar foto
+                      </Button>
+                    </label>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -227,12 +359,28 @@ export default function ProfilePage() {
                 <CardTitle>Sobre</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-zinc-300">
-                  Desenvolvedor Frontend apaixonado por criar interfaces intuitivas e acessíveis. Especializado em React
-                  e TypeScript, com experiência em desenvolvimento de aplicações web modernas. Entusiasta de hackathons
-                  e eventos de tecnologia, sempre buscando aprender e compartilhar conhecimento com a comunidade.
-                </p>
+                {isEditing ? (
+                  <textarea
+                    name="bio"
+                    value={formData.bio || ""}
+                    onChange={handleInputChange}
+                    className="w-full h-24 bg-zinc-800 border border-zinc-700 rounded-md p-2 text-white"
+                    placeholder="Conte um pouco sobre você..."
+                  />
+                ) : (
+                  <p className="text-zinc-300">{profile.bio || "Nenhuma biografia adicionada."}</p>
+                )}
               </CardContent>
+              {isEditing && (
+                <CardContent className="flex justify-end border-t border-zinc-800 pt-4">
+                  <Button
+                    className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400"
+                    onClick={handleSubmit}
+                  >
+                    Salvar alterações
+                  </Button>
+                </CardContent>
+              )}
             </Card>
 
             <Tabs defaultValue="events">
@@ -243,79 +391,37 @@ export default function ProfilePage() {
               </TabsList>
 
               <TabsContent value="events" className="mt-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[1, 2, 3, 4].map((event) => (
-                    <Card key={event} className="bg-zinc-900/50 border-zinc-800">
-                      <div className="flex p-4">
-                        <div className="w-16 h-16 rounded-md overflow-hidden mr-4 flex-shrink-0">
-                          <img
-                            src={`/placeholder.svg?height=64&width=64&text=E${event}`}
-                            alt={`Event ${event}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div>
-                          <h3 className="font-medium">Hackathon Future Tech {event}</h3>
-                          <div className="text-sm text-zinc-400 mb-1">Nov, 2024</div>
-                          <div className="flex items-center gap-1">
-                            <Badge variant="outline" className="border-orange-500/50 text-orange-400 text-xs">
-                              {event % 2 === 0 ? "Participante" : "2º Lugar"}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+                <Card className="bg-zinc-900/50 border-zinc-800">
+                  <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+                    <Calendar className="h-12 w-12 text-zinc-600 mb-4" />
+                    <h3 className="text-xl font-medium mb-2">Nenhum evento encontrado</h3>
+                    <p className="text-zinc-400 mb-6">Você ainda não participou de nenhum evento.</p>
+                    <Button className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400">
+                      Explorar eventos
+                    </Button>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="teams" className="mt-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[1, 2].map((team) => (
-                    <Card key={team} className="bg-zinc-900/50 border-zinc-800">
-                      <div className="p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={`/placeholder.svg?height=40&width=40&text=T${team}`} />
-                            <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500">
-                              T{team}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="font-medium">Team Innovators {team}</div>
-                            <div className="text-sm text-zinc-400">4 membros</div>
-                          </div>
-                        </div>
-                        <div className="flex -space-x-2 mb-2">
-                          {[1, 2, 3, 4].map((member) => (
-                            <Avatar key={member} className="border-2 border-zinc-900 h-6 w-6">
-                              <AvatarImage src={`/placeholder.svg?height=24&width=24&text=${member}`} />
-                              <AvatarFallback className="bg-gradient-to-br from-red-600 to-orange-500 text-xs">
-                                {member}
-                              </AvatarFallback>
-                            </Avatar>
-                          ))}
-                        </div>
-                        <div className="flex justify-between items-center mt-3">
-                          <Badge variant="outline" className="border-zinc-700 text-zinc-400">
-                            Hackathon Future Tech {team}
-                          </Badge>
-                          <Link href="/event/team" className="text-sm text-orange-400 hover:text-orange-300">
-                            Ver time →
-                          </Link>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+                <Card className="bg-zinc-900/50 border-zinc-800">
+                  <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+                    <Users className="h-12 w-12 text-zinc-600 mb-4" />
+                    <h3 className="text-xl font-medium mb-2">Nenhum time encontrado</h3>
+                    <p className="text-zinc-400 mb-6">Você ainda não participou de nenhum time.</p>
+                    <Button className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400">
+                      Explorar times
+                    </Button>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="achievements" className="mt-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
-                    { title: "Hackathons", value: "12", icon: <Calendar className="h-5 w-5 text-orange-400" /> },
-                    { title: "Times", value: "8", icon: <Users className="h-5 w-5 text-orange-400" /> },
-                    { title: "Prêmios", value: "3", icon: <Trophy className="h-5 w-5 text-orange-400" /> },
+                    { title: "Hackathons", value: "0", icon: <Calendar className="h-5 w-5 text-orange-400" /> },
+                    { title: "Times", value: "0", icon: <Users className="h-5 w-5 text-orange-400" /> },
+                    { title: "Prêmios", value: "0", icon: <Trophy className="h-5 w-5 text-orange-400" /> },
                   ].map((stat, index) => (
                     <Card key={index} className="bg-zinc-900/50 border-zinc-800">
                       <CardContent className="p-6 flex flex-col items-center text-center">
@@ -328,32 +434,6 @@ export default function ProfilePage() {
                     </Card>
                   ))}
                 </div>
-
-                <Card className="bg-zinc-900/50 border-zinc-800">
-                  <CardHeader>
-                    <CardTitle>Conquistas</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {[
-                      { title: "Primeiro Hackathon", desc: "Participou do primeiro evento", date: "Jan, 2023" },
-                      { title: "Formador de Time", desc: "Criou seu primeiro time", date: "Mar, 2023" },
-                      { title: "Vencedor de Bronze", desc: "Conquistou o 3º lugar", date: "Jun, 2023" },
-                      { title: "Vencedor de Prata", desc: "Conquistou o 2º lugar", date: "Nov, 2023" },
-                      { title: "Mentor", desc: "Ajudou novos participantes", date: "Fev, 2024" },
-                    ].map((achievement, index) => (
-                      <div key={index} className="flex items-start gap-3 p-3 bg-zinc-800/50 rounded-lg">
-                        <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                          <Trophy className="h-5 w-5 text-orange-400" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium">{achievement.title}</div>
-                          <div className="text-sm text-zinc-400">{achievement.desc}</div>
-                        </div>
-                        <div className="text-xs text-zinc-500">{achievement.date}</div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
               </TabsContent>
             </Tabs>
           </div>

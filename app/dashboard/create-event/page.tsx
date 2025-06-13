@@ -1,4 +1,8 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Flame,
   User,
@@ -27,6 +31,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/components/ui/use-toast"
+import { createBrowserSupabaseClient } from "@/utils/supabase/client"
+import { createEvent } from "@/lib/services/event-service"
+import { useAuth } from "@/hooks/use-auth"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +46,103 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function CreateEventPage() {
+  const router = useRouter()
+  const { toast } = useToast()
+  const { user } = useAuth()
+  const supabase = createBrowserSupabaseClient()
+  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    name: "",
+    title: "",
+    description: "",
+    event_type: "",
+    format: "",
+    categories: [] as string[],
+    start_date: "",
+    end_date: "",
+    location: "",
+    max_participants: 0,
+    max_team_size: 0,
+    registration_fee: 0,
+    cover_image_url: "",
+    status: "draft" as const,
+    is_featured: false,
+  })
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target
+    if (type === "checkbox" && e.target instanceof HTMLInputElement) {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: e.target.checked,
+        ...(name === "name" ? { title: value } : {}),
+      }))
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        ...(name === "name" ? { title: value } : {}),
+      }))
+    }
+  }
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleCategoryToggle = (category: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      categories: prev.categories.includes(category)
+        ? prev.categories.filter((c) => c !== category)
+        : [...prev.categories, category],
+    }))
+  }
+
+  const handleSubmit = async (status: "draft" | "published") => {
+    if (!user) {
+      toast({
+        title: "Erro",
+        description: "Você precisa estar logado para criar um evento",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const eventData = {
+        ...formData,
+        status,
+        organizer_id: user.id,
+        title: formData.title || formData.name,
+        is_featured: formData.is_featured,
+      }
+
+      const { event, error } = await createEvent(supabase, eventData)
+
+      if (error) {
+        throw error
+      }
+
+      toast({
+        title: "Sucesso",
+        description: `Evento ${status === "draft" ? "salvo como rascunho" : "publicado"} com sucesso!`,
+      })
+
+      router.push("/dashboard/organizer")
+    } catch (error) {
+      console.error("Erro ao criar evento:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível criar o evento. Tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -135,6 +240,9 @@ export default function CreateEventPage() {
                   <Label htmlFor="event-name">Nome do Evento</Label>
                   <Input
                     id="event-name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
                     placeholder="Ex: Hackathon Future Tech 2025"
                     className="bg-zinc-800 border-zinc-700"
                   />
@@ -144,6 +252,9 @@ export default function CreateEventPage() {
                   <Label htmlFor="event-description">Descrição</Label>
                   <Textarea
                     id="event-description"
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
                     placeholder="Descreva seu evento..."
                     className="min-h-32 bg-zinc-800 border-zinc-700"
                   />
@@ -152,7 +263,7 @@ export default function CreateEventPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="event-type">Tipo de Evento</Label>
-                    <Select>
+                    <Select value={formData.event_type} onValueChange={(value) => handleSelectChange("event_type", value)}>
                       <SelectTrigger className="bg-zinc-800 border-zinc-700">
                         <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
@@ -167,7 +278,7 @@ export default function CreateEventPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="event-format">Formato</Label>
-                    <Select>
+                    <Select value={formData.format} onValueChange={(value) => handleSelectChange("format", value)}>
                       <SelectTrigger className="bg-zinc-800 border-zinc-700">
                         <SelectValue placeholder="Selecione o formato" />
                       </SelectTrigger>
@@ -188,18 +299,15 @@ export default function CreateEventPage() {
                         <Badge
                           key={category}
                           variant="outline"
-                          className="border-zinc-700 text-zinc-400 cursor-pointer hover:border-orange-500/50 hover:text-orange-400"
+                          className={`border-zinc-700 text-zinc-400 cursor-pointer hover:border-orange-500/50 hover:text-orange-400 ${
+                            formData.categories.includes(category) ? "border-orange-500/50 text-orange-400" : ""
+                          }`}
+                          onClick={() => handleCategoryToggle(category)}
                         >
                           {category}
                         </Badge>
                       ),
                     )}
-                    <Badge
-                      variant="outline"
-                      className="border-zinc-700 text-zinc-400 cursor-pointer hover:border-orange-500/50 hover:text-orange-400"
-                    >
-                      <Plus className="h-3 w-3 mr-1" /> Adicionar
-                    </Badge>
                   </div>
                 </div>
 
@@ -216,13 +324,27 @@ export default function CreateEventPage() {
                     </div>
                   </div>
                 </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch id="is-featured" name="is_featured" checked={formData.is_featured} onCheckedChange={v => setFormData(prev => ({...prev, is_featured: v}))} />
+                  <Label htmlFor="is-featured">Destacar evento na página inicial</Label>
+                </div>
               </CardContent>
               <CardFooter className="flex justify-between border-t border-zinc-800 p-4">
-                <Button variant="outline" className="border-zinc-700">
-                  Salvar rascunho
+                <Button 
+                  variant="outline" 
+                  className="border-zinc-700"
+                  onClick={() => handleSubmit("draft")}
+                  disabled={loading}
+                >
+                  {loading ? "Salvando..." : "Salvar rascunho"}
                 </Button>
-                <Button className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400">
-                  Próximo: Detalhes
+                <Button 
+                  className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400"
+                  onClick={() => handleSubmit("published")}
+                  disabled={loading}
+                >
+                  {loading ? "Publicando..." : "Publicar evento"}
                 </Button>
               </CardFooter>
             </Card>
@@ -239,112 +361,92 @@ export default function CreateEventPage() {
                     <Label htmlFor="start-date">Data de Início</Label>
                     <div className="relative">
                       <Calendar className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                      <Input id="start-date" type="date" className="bg-zinc-800 border-zinc-700 pl-10" />
+                      <Input 
+                        id="start-date" 
+                        name="start_date"
+                        type="date" 
+                        value={formData.start_date}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700 pl-10" 
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="end-date">Data de Término</Label>
                     <div className="relative">
                       <CalendarRange className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                      <Input id="end-date" type="date" className="bg-zinc-800 border-zinc-700 pl-10" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="start-time">Horário de Início</Label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                      <Input id="start-time" type="time" className="bg-zinc-800 border-zinc-700 pl-10" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end-time">Horário de Término</Label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                      <Input id="end-time" type="time" className="bg-zinc-800 border-zinc-700 pl-10" />
+                      <Input 
+                        id="end-date" 
+                        name="end_date"
+                        type="date" 
+                        value={formData.end_date}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700 pl-10" 
+                      />
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location">Localização</Label>
+                  <Label htmlFor="location">Local</Label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                    <Input
-                      id="location"
-                      placeholder="Ex: Centro de Convenções, São Paulo, SP"
-                      className="bg-zinc-800 border-zinc-700 pl-10"
+                    <Input 
+                      id="location" 
+                      name="location"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      placeholder="Endereço ou link do evento" 
+                      className="bg-zinc-800 border-zinc-700 pl-10" 
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="online-url">URL do Evento (para eventos online)</Label>
-                  <div className="relative">
-                    <Globe className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                    <Input
-                      id="online-url"
-                      placeholder="Ex: https://meet.google.com/xyz"
-                      className="bg-zinc-800 border-zinc-700 pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="max-participants">Número Máximo de Participantes</Label>
+                    <Label htmlFor="max-participants">Máximo de Participantes</Label>
                     <div className="relative">
                       <Users className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                      <Input
-                        id="max-participants"
-                        type="number"
-                        placeholder="Ex: 200"
-                        className="bg-zinc-800 border-zinc-700 pl-10"
+                      <Input 
+                        id="max-participants" 
+                        name="max_participants"
+                        type="number" 
+                        value={formData.max_participants}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700 pl-10" 
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="team-size">Tamanho Máximo das Equipes</Label>
+                    <Label htmlFor="max-team-size">Tamanho Máximo do Time</Label>
                     <div className="relative">
                       <Users className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                      <Input
-                        id="team-size"
-                        type="number"
-                        placeholder="Ex: 5"
-                        className="bg-zinc-800 border-zinc-700 pl-10"
+                      <Input 
+                        id="max-team-size" 
+                        name="max_team_size"
+                        type="number" 
+                        value={formData.max_team_size}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700 pl-10" 
                       />
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="registration-fee">Taxa de Inscrição (R$)</Label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                    <Input
-                      id="registration-fee"
-                      type="number"
-                      placeholder="Ex: 0 para gratuito"
-                      className="bg-zinc-800 border-zinc-700 pl-10"
-                    />
+                  <div className="space-y-2">
+                    <Label htmlFor="registration-fee">Taxa de Inscrição (R$)</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
+                      <Input 
+                        id="registration-fee" 
+                        name="registration_fee"
+                        type="number" 
+                        value={formData.registration_fee}
+                        onChange={handleInputChange}
+                        className="bg-zinc-800 border-zinc-700 pl-10" 
+                      />
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch id="is-featured" />
-                  <Label htmlFor="is-featured">Destacar evento na página inicial</Label>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-between border-t border-zinc-800 p-4">
-                <Button variant="outline" className="border-zinc-700">
-                  Voltar
-                </Button>
-                <Button className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400">
-                  Próximo: Programação
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
 
@@ -358,272 +460,91 @@ export default function CreateEventPage() {
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-medium">Dia 1</h3>
                     <Button variant="outline" size="sm" className="border-zinc-700">
-                      <Plus className="h-4 w-4 mr-1.5" /> Adicionar Dia
-                    </Button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="bg-zinc-800/50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="activity-time-1">Horário</Label>
-                          <Input
-                            id="activity-time-1"
-                            type="time"
-                            defaultValue="09:00"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="activity-title-1">Atividade</Label>
-                          <Input
-                            id="activity-title-1"
-                            defaultValue="Credenciamento"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                          <Input
-                            placeholder="Descrição (opcional)"
-                            defaultValue="Recepção e entrega de kits"
-                            className="bg-zinc-800 border-zinc-700 mt-2"
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-zinc-800/50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="activity-time-2">Horário</Label>
-                          <Input
-                            id="activity-time-2"
-                            type="time"
-                            defaultValue="10:00"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="activity-title-2">Atividade</Label>
-                          <Input
-                            id="activity-title-2"
-                            defaultValue="Cerimônia de abertura"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                          <Input
-                            placeholder="Descrição (opcional)"
-                            defaultValue="Apresentação dos desafios"
-                            className="bg-zinc-800 border-zinc-700 mt-2"
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button variant="outline" className="w-full border-dashed border-zinc-700">
                       <Plus className="h-4 w-4 mr-1.5" /> Adicionar Atividade
                     </Button>
                   </div>
-                </div>
 
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium">Dia 2</h3>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="bg-zinc-800/50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="activity-time-3">Horário</Label>
-                          <Input
-                            id="activity-time-3"
-                            type="time"
-                            defaultValue="09:00"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="activity-title-3">Atividade</Label>
-                          <Input
-                            id="activity-title-3"
-                            defaultValue="Mentorias"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                          <Input
-                            placeholder="Descrição (opcional)"
-                            defaultValue="Sessões com especialistas da indústria"
-                            className="bg-zinc-800 border-zinc-700 mt-2"
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                  <div className="bg-zinc-800/50 p-4 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="activity-time-1">Horário</Label>
+                        <Input
+                          id="activity-time-1"
+                          type="time"
+                          defaultValue="09:00"
+                          className="bg-zinc-800 border-zinc-700"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="activity-title-1">Atividade</Label>
+                        <Input
+                          id="activity-title-1"
+                          defaultValue="Credenciamento"
+                          className="bg-zinc-800 border-zinc-700"
+                        />
+                        <Input
+                          placeholder="Descrição (opcional)"
+                          defaultValue="Recepção e entrega de kits"
+                          className="bg-zinc-800 border-zinc-700 mt-2"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-
-                    <Button variant="outline" className="w-full border-dashed border-zinc-700">
-                      <Plus className="h-4 w-4 mr-1.5" /> Adicionar Atividade
-                    </Button>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-between border-t border-zinc-800 p-4">
-                <Button variant="outline" className="border-zinc-700">
-                  Voltar
-                </Button>
-                <Button className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400">
-                  Próximo: Prêmios
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
 
           <TabsContent value="prizes" className="space-y-6">
             <Card className="bg-zinc-900/50 border-zinc-800">
               <CardHeader>
-                <CardTitle>Prêmios e Recompensas</CardTitle>
+                <CardTitle>Premiação</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Prêmios Principais</h3>
-                  <div className="space-y-3">
-                    <div className="bg-zinc-800/50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="prize-place-1">Colocação</Label>
-                          <Input id="prize-place-1" defaultValue="1º Lugar" className="bg-zinc-800 border-zinc-700" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="prize-value-1">Valor/Descrição</Label>
-                          <div className="flex gap-2">
-                            <div className="relative flex-1">
-                              <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                              <Input
-                                id="prize-value-1"
-                                defaultValue="25000"
-                                className="bg-zinc-800 border-zinc-700 pl-10"
-                              />
-                            </div>
-                            <Input
-                              placeholder="Descrição adicional"
-                              defaultValue="+ Incubação do projeto"
-                              className="bg-zinc-800 border-zinc-700 flex-1"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-end">
-                          <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="first-place">1º Lugar</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
+                      <Input
+                        id="first-place"
+                        type="number"
+                        placeholder="Valor em R$"
+                        className="bg-zinc-800 border-zinc-700 pl-10"
+                      />
                     </div>
-
-                    <div className="bg-zinc-800/50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_auto] gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="prize-place-2">Colocação</Label>
-                          <Input id="prize-place-2" defaultValue="2º Lugar" className="bg-zinc-800 border-zinc-700" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="prize-value-2">Valor/Descrição</Label>
-                          <div className="flex gap-2">
-                            <div className="relative flex-1">
-                              <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
-                              <Input
-                                id="prize-value-2"
-                                defaultValue="15000"
-                                className="bg-zinc-800 border-zinc-700 pl-10"
-                              />
-                            </div>
-                            <Input
-                              placeholder="Descrição adicional"
-                              defaultValue="+ Mentoria especializada"
-                              className="bg-zinc-800 border-zinc-700 flex-1"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-end">
-                          <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="second-place">2º Lugar</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
+                      <Input
+                        id="second-place"
+                        type="number"
+                        placeholder="Valor em R$"
+                        className="bg-zinc-800 border-zinc-700 pl-10"
+                      />
                     </div>
-
-                    <Button variant="outline" className="w-full border-dashed border-zinc-700">
-                      <Plus className="h-4 w-4 mr-1.5" /> Adicionar Prêmio
-                    </Button>
                   </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Categorias Especiais</h3>
-                  <div className="space-y-3">
-                    <div className="bg-zinc-800/50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="special-category-1">Categoria</Label>
-                          <Input
-                            id="special-category-1"
-                            defaultValue="Melhor Inovação em IA"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="special-prize-1">Prêmio</Label>
-                          <Input
-                            id="special-prize-1"
-                            defaultValue="R$ 5.000 + Acesso a APIs premium"
-                            className="bg-zinc-800 border-zinc-700"
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="third-place">3º Lugar</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-zinc-500" />
+                      <Input
+                        id="third-place"
+                        type="number"
+                        placeholder="Valor em R$"
+                        className="bg-zinc-800 border-zinc-700 pl-10"
+                      />
                     </div>
-
-                    <Button variant="outline" className="w-full border-dashed border-zinc-700">
-                      <Plus className="h-4 w-4 mr-1.5" /> Adicionar Categoria Especial
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="certificates">Certificados</Label>
-                  <div className="flex items-center space-x-2">
-                    <Switch id="certificates" defaultChecked />
-                    <Label htmlFor="certificates">Emitir certificados para participantes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2 mt-2">
-                    <Switch id="nft-certificates" />
-                    <Label htmlFor="nft-certificates">Emitir certificados como NFTs</Label>
                   </div>
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-between border-t border-zinc-800 p-4">
-                <Button variant="outline" className="border-zinc-700">
-                  Voltar
-                </Button>
-                <Button className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400">
-                  <Link href="/dashboard/organizer" className="text-white">
-                    Criar Evento
-                  </Link>
-                </Button>
-              </CardFooter>
             </Card>
           </TabsContent>
         </Tabs>

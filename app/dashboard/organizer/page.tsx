@@ -18,6 +18,7 @@ import {
   Eye,
   Filter,
   Users,
+  MoreVertical,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,11 +36,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { AuthGuard } from "@/components/auth-guard"
-import { useAuth } from "@/hooks/use-auth"
-import { getEvents } from "@/lib/services/event-service"
+import { useAuth } from "@/lib/hooks/use-auth"
+import { getOrganizerEvents, deleteEvent, type Event } from "@/lib/services/event-service"
 import { createBrowserSupabaseClient } from "@/utils/supabase/client"
-import { useToast } from "@/hooks/use-toast"
-import type { Event } from "@/lib/services/event-service"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function OrganizerDashboardPage() {
   const { user } = useAuth()
@@ -49,33 +49,43 @@ export default function OrganizerDashboardPage() {
   const supabase = createBrowserSupabaseClient()
 
   useEffect(() => {
-    const fetchEvents = async () => {
-      if (!user) return
-
-      try {
-        const eventsData = await getEvents(supabase)
-        // Filtrar apenas eventos do organizador atual
-        const organizerEvents = eventsData.filter((event) => event.organizer_id === user.id)
-        setEvents(organizerEvents)
-      } catch (error) {
-        console.error("Erro ao buscar eventos:", error)
-        toast({
-          title: "Erro ao carregar eventos",
-          description: "Não foi possível carregar seus eventos. Tente novamente mais tarde.",
-          variant: "destructive",
-        })
-      } finally {
-        setLoading(false)
-      }
+    if (user?.id) {
+      loadEvents()
     }
+  }, [user?.id])
 
-    fetchEvents()
-  }, [user, toast, supabase])
+  const loadEvents = async () => {
+    if (!user?.id) return
+    const eventsData = await getOrganizerEvents(user.id)
+    setEvents(eventsData)
+    setLoading(false)
+  }
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm("Tem certeza que deseja excluir este evento?")) return
+
+    const success = await deleteEvent(eventId)
+    if (success) {
+      setEvents((prev) => prev.filter((event) => event.id !== eventId))
+      toast({
+        title: "Evento excluído com sucesso!",
+      })
+    } else {
+      toast({
+        title: "Erro ao excluir evento",
+        description: "Não foi possível excluir o evento. Tente novamente mais tarde.",
+        variant: "destructive",
+      })
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500"></div>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-500 mx-auto mb-4"></div>
+          <p>Carregando eventos...</p>
+        </div>
       </div>
     )
   }
@@ -243,84 +253,43 @@ export default function OrganizerDashboardPage() {
                 <div className="space-y-4">
                   {events.map((event) => (
                     <Card key={event.id} className="bg-zinc-900/50 border-zinc-800">
-                      <div className="flex flex-col md:flex-row">
-                        <div className="w-full md:w-48 h-32 md:h-auto">
-                          <div className="relative h-full w-full">
-                            <div className="absolute inset-0 bg-gradient-to-br from-red-600/80 to-orange-500/80 mix-blend-multiply" />
-                            <img
-                              src={event.cover_image_url || `/placeholder.svg?height=200&width=200&text=${event.name}`}
-                              alt={event.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <Badge
-                              className={`absolute top-2 right-2 ${
-                                event.status === "published"
-                                  ? "bg-green-600"
-                                  : event.status === "draft"
-                                    ? "bg-yellow-600"
-                                    : event.status === "completed"
-                                      ? "bg-blue-600"
-                                      : "bg-red-600"
-                              }`}
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-lg font-medium">{event.title}</CardTitle>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="w-48 bg-zinc-900 border-zinc-800 text-white">
+                            <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                              <Edit className="mr-2 h-4 w-4" />
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="hover:bg-zinc-800 cursor-pointer text-red-400 hover:text-red-300"
+                              onClick={() => handleDeleteEvent(event.id)}
                             >
-                              {event.status === "published"
-                                ? "Publicado"
-                                : event.status === "draft"
-                                  ? "Rascunho"
-                                  : event.status === "completed"
-                                    ? "Concluído"
-                                    : "Cancelado"}
-                            </Badge>
-                          </div>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-zinc-400 mb-4 line-clamp-2">{event.description}</p>
+                        <div className="flex items-center gap-2 text-sm text-zinc-400">
+                          <Calendar className="h-4 w-4" />
+                          <span>
+                            {new Date(event.start_date).toLocaleDateString()} -{" "}
+                            {new Date(event.end_date).toLocaleDateString()}
+                          </span>
                         </div>
-                        <div className="flex-1 p-4">
-                          <div className="flex flex-col md:flex-row justify-between">
-                            <div>
-                              <h3 className="font-bold text-lg">{event.name}</h3>
-                              <div className="flex flex-wrap gap-2 items-center text-sm text-zinc-400 my-2">
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
-                                  <span>
-                                    {new Date(event.start_date).toLocaleDateString("pt-BR")} -{" "}
-                                    {new Date(event.end_date).toLocaleDateString("pt-BR")}
-                                  </span>
-                                </div>
-                              </div>
-                              <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
-                                {event.description || "Sem descrição"}
-                              </p>
-                            </div>
-                            <div className="flex flex-col gap-2 mt-4 md:mt-0">
-                              <div className="flex gap-2">
-                                <Button variant="outline" size="sm" className="border-zinc-700">
-                                  <Link href={`/event/details?id=${event.id}`} className="flex items-center">
-                                    <Eye className="h-4 w-4 mr-1.5" /> Ver
-                                  </Link>
-                                </Button>
-                                <Button variant="outline" size="sm" className="border-zinc-700">
-                                  <Link href={`/dashboard/edit-event?id=${event.id}`} className="flex items-center">
-                                    <Edit className="h-4 w-4 mr-1.5" /> Editar
-                                  </Link>
-                                </Button>
-                              </div>
-                              <Button variant="outline" size="sm" className="border-zinc-700 text-red-400">
-                                <Trash2 className="h-4 w-4 mr-1.5" /> Excluir
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="mt-4">
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-zinc-400">Inscrições</span>
-                              <span className="font-medium">
-                                {Math.floor(Math.random() * 100)}/{event.max_participants || 200}
-                              </span>
-                            </div>
-                            <Progress value={Math.floor(Math.random() * 100)} className="h-2 bg-zinc-800">
-                              <div className="h-full bg-gradient-to-r from-red-600 to-orange-500 rounded-full" />
-                            </Progress>
-                          </div>
+                        <div className="flex items-center gap-2 text-sm text-zinc-400 mt-2">
+                          <Users className="h-4 w-4" />
+                          <span>{event.location}</span>
                         </div>
-                      </div>
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
@@ -338,68 +307,43 @@ export default function OrganizerDashboardPage() {
                     .filter((event) => event.status === "published")
                     .map((event) => (
                       <Card key={event.id} className="bg-zinc-900/50 border-zinc-800">
-                        <div className="flex flex-col md:flex-row">
-                          <div className="w-full md:w-48 h-32 md:h-auto">
-                            <div className="relative h-full w-full">
-                              <div className="absolute inset-0 bg-gradient-to-br from-red-600/80 to-orange-500/80 mix-blend-multiply" />
-                              <img
-                                src={
-                                  event.cover_image_url || `/placeholder.svg?height=200&width=200&text=${event.name}`
-                                }
-                                alt={event.name}
-                                className="w-full h-full object-cover"
-                              />
-                              <Badge className="absolute top-2 right-2 bg-green-600">Publicado</Badge>
-                            </div>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-lg font-medium">{event.title}</CardTitle>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-48 bg-zinc-900 border-zinc-800 text-white">
+                              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="hover:bg-zinc-800 cursor-pointer text-red-400 hover:text-red-300"
+                                onClick={() => handleDeleteEvent(event.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-zinc-400 mb-4 line-clamp-2">{event.description}</p>
+                          <div className="flex items-center gap-2 text-sm text-zinc-400">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {new Date(event.start_date).toLocaleDateString()} -{" "}
+                              {new Date(event.end_date).toLocaleDateString()}
+                            </span>
                           </div>
-                          <div className="flex-1 p-4">
-                            <div className="flex flex-col md:flex-row justify-between">
-                              <div>
-                                <h3 className="font-bold text-lg">{event.name}</h3>
-                                <div className="flex flex-wrap gap-2 items-center text-sm text-zinc-400 my-2">
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>
-                                      {new Date(event.start_date).toLocaleDateString("pt-BR")} -{" "}
-                                      {new Date(event.end_date).toLocaleDateString("pt-BR")}
-                                    </span>
-                                  </div>
-                                </div>
-                                <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
-                                  {event.description || "Sem descrição"}
-                                </p>
-                              </div>
-                              <div className="flex flex-col gap-2 mt-4 md:mt-0">
-                                <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" className="border-zinc-700">
-                                    <Link href={`/event/details?id=${event.id}`} className="flex items-center">
-                                      <Eye className="h-4 w-4 mr-1.5" /> Ver
-                                    </Link>
-                                  </Button>
-                                  <Button variant="outline" size="sm" className="border-zinc-700">
-                                    <Link href={`/dashboard/edit-event?id=${event.id}`} className="flex items-center">
-                                      <Edit className="h-4 w-4 mr-1.5" /> Editar
-                                    </Link>
-                                  </Button>
-                                </div>
-                                <Button variant="outline" size="sm" className="border-zinc-700 text-red-400">
-                                  <Trash2 className="h-4 w-4 mr-1.5" /> Excluir
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="mt-4">
-                              <div className="flex justify-between text-sm mb-1">
-                                <span className="text-zinc-400">Inscrições</span>
-                                <span className="font-medium">
-                                  {Math.floor(Math.random() * 100)}/{event.max_participants || 200}
-                                </span>
-                              </div>
-                              <Progress value={Math.floor(Math.random() * 100)} className="h-2 bg-zinc-800">
-                                <div className="h-full bg-gradient-to-r from-red-600 to-orange-500 rounded-full" />
-                              </Progress>
-                            </div>
+                          <div className="flex items-center gap-2 text-sm text-zinc-400 mt-2">
+                            <Users className="h-4 w-4" />
+                            <span>{event.location}</span>
                           </div>
-                        </div>
+                        </CardContent>
                       </Card>
                     ))}
                 </div>
@@ -417,53 +361,43 @@ export default function OrganizerDashboardPage() {
                     .filter((event) => event.status === "draft")
                     .map((event) => (
                       <Card key={event.id} className="bg-zinc-900/50 border-zinc-800">
-                        <div className="flex flex-col md:flex-row">
-                          <div className="w-full md:w-48 h-32 md:h-auto">
-                            <div className="relative h-full w-full">
-                              <div className="absolute inset-0 bg-gradient-to-br from-red-600/80 to-orange-500/80 mix-blend-multiply" />
-                              <img
-                                src={
-                                  event.cover_image_url || `/placeholder.svg?height=200&width=200&text=${event.name}`
-                                }
-                                alt={event.name}
-                                className="w-full h-full object-cover"
-                              />
-                              <Badge className="absolute top-2 right-2 bg-yellow-600">Rascunho</Badge>
-                            </div>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-lg font-medium">{event.title}</CardTitle>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-48 bg-zinc-900 border-zinc-800 text-white">
+                              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="hover:bg-zinc-800 cursor-pointer text-red-400 hover:text-red-300"
+                                onClick={() => handleDeleteEvent(event.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-zinc-400 mb-4 line-clamp-2">{event.description}</p>
+                          <div className="flex items-center gap-2 text-sm text-zinc-400">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {new Date(event.start_date).toLocaleDateString()} -{" "}
+                              {new Date(event.end_date).toLocaleDateString()}
+                            </span>
                           </div>
-                          <div className="flex-1 p-4">
-                            <div className="flex flex-col md:flex-row justify-between">
-                              <div>
-                                <h3 className="font-bold text-lg">{event.name}</h3>
-                                <div className="flex flex-wrap gap-2 items-center text-sm text-zinc-400 my-2">
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>
-                                      {new Date(event.start_date).toLocaleDateString("pt-BR")} -{" "}
-                                      {new Date(event.end_date).toLocaleDateString("pt-BR")}
-                                    </span>
-                                  </div>
-                                </div>
-                                <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
-                                  {event.description || "Sem descrição"}
-                                </p>
-                              </div>
-                              <div className="flex flex-col gap-2 mt-4 md:mt-0">
-                                <Button variant="outline" size="sm" className="border-zinc-700">
-                                  <Link href={`/dashboard/edit-event?id=${event.id}`} className="flex items-center">
-                                    <Edit className="h-4 w-4 mr-1.5" /> Editar
-                                  </Link>
-                                </Button>
-                                <Button
-                                  className="bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400"
-                                  size="sm"
-                                >
-                                  Publicar
-                                </Button>
-                              </div>
-                            </div>
+                          <div className="flex items-center gap-2 text-sm text-zinc-400 mt-2">
+                            <Users className="h-4 w-4" />
+                            <span>{event.location}</span>
                           </div>
-                        </div>
+                        </CardContent>
                       </Card>
                     ))}
                 </div>
@@ -481,57 +415,43 @@ export default function OrganizerDashboardPage() {
                     .filter((event) => event.status === "completed")
                     .map((event) => (
                       <Card key={event.id} className="bg-zinc-900/50 border-zinc-800">
-                        <div className="flex flex-col md:flex-row">
-                          <div className="w-full md:w-48 h-32 md:h-auto">
-                            <div className="relative h-full w-full">
-                              <div className="absolute inset-0 bg-gradient-to-br from-zinc-700/90 to-zinc-900/90 mix-blend-multiply" />
-                              <img
-                                src={
-                                  event.cover_image_url || `/placeholder.svg?height=200&width=200&text=${event.name}`
-                                }
-                                alt={event.name}
-                                className="w-full h-full object-cover grayscale"
-                              />
-                              <Badge className="absolute top-2 right-2 bg-blue-600">Concluído</Badge>
-                            </div>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                          <CardTitle className="text-lg font-medium">{event.title}</CardTitle>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-48 bg-zinc-900 border-zinc-800 text-white">
+                              <DropdownMenuItem className="hover:bg-zinc-800 cursor-pointer">
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="hover:bg-zinc-800 cursor-pointer text-red-400 hover:text-red-300"
+                                onClick={() => handleDeleteEvent(event.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-zinc-400 mb-4 line-clamp-2">{event.description}</p>
+                          <div className="flex items-center gap-2 text-sm text-zinc-400">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {new Date(event.start_date).toLocaleDateString()} -{" "}
+                              {new Date(event.end_date).toLocaleDateString()}
+                            </span>
                           </div>
-                          <div className="flex-1 p-4">
-                            <div className="flex flex-col md:flex-row justify-between">
-                              <div>
-                                <h3 className="font-bold text-lg">{event.name}</h3>
-                                <div className="flex flex-wrap gap-2 items-center text-sm text-zinc-400 my-2">
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>
-                                      {new Date(event.start_date).toLocaleDateString("pt-BR")} -{" "}
-                                      {new Date(event.end_date).toLocaleDateString("pt-BR")}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Badge variant="outline" className="border-orange-500/50 text-orange-400">
-                                    {Math.floor(Math.random() * 50) + 10} Projetos
-                                  </Badge>
-                                  <Badge variant="outline" className="border-orange-500/50 text-orange-400">
-                                    {Math.floor(Math.random() * 200) + 50} Participantes
-                                  </Badge>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-2 mt-4 md:mt-0">
-                                <Button variant="outline" size="sm" className="border-zinc-700">
-                                  <Link href={`/event/details?id=${event.id}`} className="flex items-center">
-                                    <Eye className="h-4 w-4 mr-1.5" /> Ver
-                                  </Link>
-                                </Button>
-                                <Button variant="outline" size="sm" className="border-zinc-700">
-                                  <Link href={`/dashboard/event-results?id=${event.id}`} className="flex items-center">
-                                    <BarChart className="h-4 w-4 mr-1.5" /> Resultados
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
+                          <div className="flex items-center gap-2 text-sm text-zinc-400 mt-2">
+                            <Users className="h-4 w-4" />
+                            <span>{event.location}</span>
                           </div>
-                        </div>
+                        </CardContent>
                       </Card>
                     ))}
                 </div>

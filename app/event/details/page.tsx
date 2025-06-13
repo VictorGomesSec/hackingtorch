@@ -440,21 +440,10 @@ export default function EventDetailsPage() {
               <CardHeader>
                 <CardTitle>Eventos relacionados</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {[1, 2, 3].map((event) => (
-                  <Link href="#" key={event} className="flex items-start gap-3 p-2 rounded-lg hover:bg-zinc-800/50">
-                    <img
-                      src={`/placeholder.svg?height=60&width=60&text=${event}`}
-                      alt={`Event ${event}`}
-                      className="w-12 h-12 rounded-md object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">Workshop Tech {event}</div>
-                      <div className="text-sm text-zinc-400">20 Jun, 2025</div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-zinc-500 mt-1" />
-                  </Link>
-                ))}
+              <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+                <Calendar className="h-12 w-12 text-zinc-600 mb-4" />
+                <h3 className="text-xl font-medium mb-2">Nenhum evento relacionado</h3>
+                <p className="text-zinc-400 mb-6">Não há eventos relacionados disponíveis no momento.</p>
               </CardContent>
             </Card>
           </div>

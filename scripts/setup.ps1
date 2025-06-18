@@ -39,4 +39,4 @@ Write-Host "`nConfiguração concluída!" -ForegroundColor $GREEN
 Write-Host "Próximos passos:" -ForegroundColor $YELLOW
 Write-Host "1. Configure as variáveis de ambiente no arquivo .env.local com suas credenciais do Supabase"
 Write-Host "2. Crie um projeto no Google Cloud Platform e configure o Google Wallet"
-Write-Host "3. Execute 'npm run dev' para iniciar o servidor de desenvolvimento" 
+Write-Host "3. Execute 'npm run dev' para iniciar o servidor de desenvolvimento"

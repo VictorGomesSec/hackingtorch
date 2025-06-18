@@ -31,4 +31,4 @@ export const createMiddlewareSupabaseClient = (request: NextRequest) => {
   )
 
   return { response, supabase }
-} 
+}

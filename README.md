@@ -21,39 +21,39 @@ Plataforma para gerenciamento de eventos de tecnologia, incluindo hackathons, wo
 ## 🔧 Configuração
 
 1. Clone o repositório:
-```bash
+\`\`\`bash
 git clone https://github.com/seu-usuario/hackingtorch.git
 cd hackingtorch
-```
+\`\`\`
 
 2. Instale as dependências:
-```bash
+\`\`\`bash
 npm install
 # ou
 pnpm install
-```
+\`\`\`
 
 3. Configure as variáveis de ambiente:
-```bash
+\`\`\`bash
 # No Windows (PowerShell):
 Copy-Item .env.example .env.local
 
 # No Linux/Mac:
 cp .env.example .env.local
-```
+\`\`\`
 
 4. Configure o Supabase:
    - Crie um projeto no [Supabase](https://supabase.com)
    - Copie as credenciais do projeto para o arquivo `.env.local`
    - Execute o script de configuração:
-   ```bash
+   \`\`\`bash
    # No Windows (PowerShell):
    .\scripts\setup.ps1
 
    # No Linux/Mac:
    chmod +x scripts/setup.sh
    ./scripts/setup.sh
-   ```
+   \`\`\`
 
 5. Configure o Google Wallet:
    - Crie um projeto no [Google Cloud Platform](https://console.cloud.google.com)
@@ -65,17 +65,17 @@ cp .env.example .env.local
 ## 🏃‍♂️ Executando o projeto
 
 1. Inicie o servidor de desenvolvimento:
-```bash
+\`\`\`bash
 npm run dev
 # ou
 pnpm dev
-```
+\`\`\`
 
 2. Acesse `http://localhost:3000`
 
 ## 📦 Estrutura do Projeto
 
-```
+\`\`\`
 hackingtorch/
 ├── app/                # Rotas e páginas da aplicação
 ├── components/         # Componentes React reutilizáveis
@@ -84,7 +84,7 @@ hackingtorch/
 ├── styles/            # Estilos globais
 ├── types/             # Definições de tipos TypeScript
 └── supabase/          # Configurações e migrações do Supabase
-```
+\`\`\`
 
 ## 🔐 Autenticação
 
@@ -102,4 +102,4 @@ O projeto integra com o Google Wallet para:
 
 ## 📝 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes. 
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.

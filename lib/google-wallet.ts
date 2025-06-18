@@ -142,4 +142,4 @@ export class GoogleWalletService {
       throw new Error('Falha ao criar classe do ingresso');
     }
   }
-} 
+}

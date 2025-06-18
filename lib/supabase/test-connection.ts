@@ -23,4 +23,4 @@ export async function testSupabaseConnection() {
     console.error('Erro ao testar conexão:', error)
     return false
   }
-} 
+}

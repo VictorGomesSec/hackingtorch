@@ -43,4 +43,4 @@ export function SupabaseTest() {
       Conexão com Supabase estabelecida com sucesso!
     </div>
   )
-} 
+}

@@ -46,4 +46,4 @@ export function Navbar() {
       </div>
     </header>
   )
-} 
+}

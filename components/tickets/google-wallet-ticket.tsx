@@ -96,4 +96,4 @@ export function GoogleWalletTicket({ ticketData }: GoogleWalletTicketProps) {
       </div>
     </Card>
   )
-} 
+}

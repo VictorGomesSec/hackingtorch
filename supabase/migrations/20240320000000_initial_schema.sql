@@ -255,4 +255,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER on_profile_deleted
     BEFORE DELETE ON profiles
-    FOR EACH ROW EXECUTE FUNCTION public.handle_user_deletion(); 
+    FOR EACH ROW EXECUTE FUNCTION public.handle_user_deletion();

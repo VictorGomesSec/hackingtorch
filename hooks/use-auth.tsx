@@ -5,7 +5,8 @@ import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { Session, User, AuthError } from "@supabase/supabase-js"
-import { createBrowserSupabaseClient } from "@/utils/supabase/client"
+import { createBrowserSupabaseClient } from "@/lib/supabase/client" // Importação corrigida
+import { supabaseConfig } from "@/lib/supabase/config" // Importar a configuração centralizada
 
 type AuthContextType = {
   user: User | null
@@ -19,6 +20,7 @@ type AuthContextType = {
   ) => Promise<{ error: AuthError | Error | null; user: User | null }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: AuthError | Error | null }>
+  isConfigValid: boolean // Adicionado para expor a validade da configuração
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -29,7 +31,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
+  // Usar a mesma instância do cliente Supabase em todo o componente
   const supabase = createBrowserSupabaseClient()
+  const isConfigValid = supabaseConfig.isValid() // Obter a validade da configuração
 
   useEffect(() => {
     const getSession = async () => {
@@ -82,6 +86,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, userData: Record<string, any>) => {
     try {
+      console.log("Iniciando registro com:", { email, userData })
+
+      // A validação das variáveis de ambiente agora é feita por supabaseConfig.isValid()
+      if (!isConfigValid) {
+        console.error("Variáveis de ambiente do Supabase não estão definidas ou são inválidas.")
+        return {
+          error: new Error("Configuração do Supabase incompleta ou inválida. Contate o administrador."),
+          user: null,
+        }
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -90,6 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
+
+      console.log("Resposta do registro:", { data, error })
 
       if (error) {
         console.error("Erro retornado pelo Supabase:", error)
@@ -139,6 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signOut,
         resetPassword,
+        isConfigValid, // Passar a validade da configuração
       }}
     >
       {children}
@@ -154,8 +172,12 @@ export function useAuth() {
   return context
 }
 
-// Função utilitária para validar as variáveis de ambiente apenas no cliente
+// A função useSupabaseConfigValid foi movida para dentro do AuthContext
+// e é acessada via useAuth().isConfigValid
+
+// Função utilitária para validar as variáveis de ambiente (reintroduzida para compatibilidade)
 export function useSupabaseConfigValid() {
-  if (typeof window === "undefined") return false;
-  return !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // Esta função agora apenas delega para a validação centralizada
+  // e é mantida para compatibilidade com código existente que a importa.
+  return supabaseConfig.isValid()
 }
